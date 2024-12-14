@@ -105,7 +105,7 @@ fn parse_fractional_part(s: &str) -> Result<f64, ParseNumberError> {
 #[cfg(test)]
 mod tests {
     use super::{parse_float, parse_hexadecimal_float};
-    use crate::ExtendedBigDecimal;
+    use crate::{numberparse::ParseNumberError, ExtendedBigDecimal};
     use num_traits::ToPrimitive;
     #[test]
     #[allow(clippy::cognitive_complexity)]
@@ -116,7 +116,7 @@ mod tests {
         ];
 
         for s in samples {
-            assert_eq!(parse_float(s).is_err(), true);
+            assert_eq!(parse_float(s).unwrap_err(), ParseNumberError::Float);
         }
     }
 
