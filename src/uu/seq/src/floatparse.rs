@@ -2,15 +2,14 @@ use crate::extendedbigdecimal::ExtendedBigDecimal;
 use crate::number::PreciseNumber;
 use crate::numberparse::ParseNumberError;
 use bigdecimal::BigDecimal;
-use num_bigint::BigInt;
+use num_traits::FromPrimitive;
 
 pub fn parse_hexadecimal_float(s: &str) -> Result<PreciseNumber, ParseNumberError> {
-    let (value, scale) = parse_float(s).map(|x| float_to_scaled_integer(x, None))?;
-    let num = BigInt::from(value);
-    let num = BigDecimal::from_bigint(num, -scale);
-    let fractional_digits = if scale < 0 { -scale as usize } else { 0 };
+    let value = parse_float(s)?;
+    let number = BigDecimal::from_f64(value).ok_or(ParseNumberError::Float)?;
+    let fractional_digits = i64::max(number.fractional_digit_count(), 0) as usize;
     Ok(PreciseNumber::new(
-        ExtendedBigDecimal::BigDecimal(num),
+        ExtendedBigDecimal::BigDecimal(number),
         0,
         fractional_digits,
     ))
@@ -103,28 +102,9 @@ fn parse_fractional_part(s: &str) -> Result<f64, ParseNumberError> {
     Ok(total)
 }
 
-fn float_to_scaled_integer(input: f64, precision: Option<f64>) -> (i64, i64) {
-    let mut scaled_value = input;
-    let mut scale = 0;
-    let mut multiplier = 10.0;
-    let precision = precision.unwrap_or(0.000001);
-    loop {
-        let rounded_value = scaled_value.round();
-        if f64::abs(rounded_value - scaled_value) <= precision {
-            return (rounded_value as i64, -scale);
-        }
-        scale += 1;
-        // 'scaled_value *= 10.0' is efficient but less precise, due to accumulating rounding errors over iterations.
-        // 'scaled_value = input * 10.0_f64.powi(scale)' is more precise, but it's less efficient due to recalculating the power each time.
-        // 'scaled_value = input * multiplier' - seems like a good balance between calculation errors and efficiency.
-        scaled_value = input * multiplier;
-        multiplier *= 10.0;
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{float_to_scaled_integer, parse_float, parse_hexadecimal_float};
+    use super::{parse_float, parse_hexadecimal_float};
     use crate::ExtendedBigDecimal;
     use num_traits::ToPrimitive;
     #[test]
@@ -191,38 +171,6 @@ mod tests {
                 ExtendedBigDecimal::BigDecimal(bd) => assert_eq!(bd.to_f64().unwrap(), v),
                 _ => unreachable!(),
             }
-        }
-    }
-
-    #[test]
-    #[allow(clippy::cognitive_complexity)]
-    fn test_float_to_scaled_integers() {
-        let samples = [
-            (0.0, (0, 0)),
-            (0.5, (5, -1)),
-            (1.5, (15, -1)),
-            (-0.5, (-5, -1)),
-            (-1.5, (-15, -1)),
-            (0.375, (375, -3)),
-            (1.375, (1375, -3)),
-            (1.375, (1375, -3)),
-            (1.372, (1372, -3)),
-            (1.378, (1378, -3)),
-            (1.0, (1, 0)),
-            (10.0, (10, 0)),
-            (123.12345678, (12312345678, -8)),
-            (-123.12345678, (-12312345678, -8)),
-            (-334.22923, (-33422923, -5)),
-            (1000.00001, (100000001, -5)),
-            (4334.123456788, (4334123456788, -9)),
-            (123456789.123456789, (1234567891234568, -7)), // truncated value
-            (-123456789.123456789, (-1234567891234568, -7)), // truncated value
-        ];
-
-        for (input, (control_value, control_scale)) in samples {
-            let (value, scale) = float_to_scaled_integer(input, None);
-            assert_eq!(value, control_value);
-            assert_eq!(scale, control_scale);
         }
     }
 }
