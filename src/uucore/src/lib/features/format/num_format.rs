@@ -442,7 +442,23 @@ fn format_float_shortest(
         //    of digits instead of the digits in the fractional part.
         //  - If we don't force the decimal, `.` and trailing `0` in the fractional part
         //    are trimmed.
-        let decimal_places = (precision as i32 - exponent) as usize;
+        let decimal_places = if f.abs() >= 1.0 {
+            (precision as i32 - exponent) as usize
+        } else {
+            // This is a special case for |f| < 1.0.
+            //
+            // `decimal_places` is calculated as the sum of the padding zeros on the left
+            // and the number of significant digits. The precision parameter applies only
+            // to the significant digits.
+            //
+            // For example, the number 0.01171875 with a precision of 6 should be interpreted as
+            // 2 padding zeros and 7 significant digits (1171875). Applying the precision parameter
+            // to 1171875 results in the number 117188.
+            //
+            // So, the final result is 0.0117188.
+            let padding_zeros = -f.abs().log10().floor() as usize;
+            precision + padding_zeros
+        };
         let mut formatted = if decimal_places == 0 && force_decimal == ForceDecimal::Yes {
             format!("{f:.0}.")
         } else {
@@ -664,5 +680,17 @@ mod test {
         assert_eq!(&f("1000."), "1000");
         assert_eq!(&f("1000.02030"), "1000.0203");
         assert_eq!(&f("1000.00000"), "1000");
+    }
+
+    #[test]
+    fn shortest_float_less_than_one() {
+        use super::format_float_shortest;
+        let f = |x| format_float_shortest(x, 6, Case::Lowercase, ForceDecimal::No);
+        assert_eq!(f(0.1171875), "0.117188");
+        assert_eq!(f(-0.1171875), "-0.117188");
+        assert_eq!(f(0.01171875), "0.0117188");
+        assert_eq!(f(-0.01171875), "-0.0117188");
+        assert_eq!(f(0.001171875), "0.00117187");
+        assert_eq!(f(-0.001171875), "-0.00117187");
     }
 }
