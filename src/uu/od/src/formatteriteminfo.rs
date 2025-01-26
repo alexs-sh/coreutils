@@ -26,8 +26,8 @@ impl PartialEq for FormatWriter {
         use crate::formatteriteminfo::FormatWriter::*;
 
         match (self, other) {
-            (IntWriter(a), IntWriter(b)) => a == b,
-            (FloatWriter(a), FloatWriter(b)) => a == b,
+            (IntWriter(a), IntWriter(b)) => std::ptr::addr_eq(a,b),
+            (FloatWriter(a), FloatWriter(b)) => std::ptr::addr_eq(a,b),
             (MultibyteWriter(a), MultibyteWriter(b)) => *a as usize == *b as usize,
             _ => false,
         }
